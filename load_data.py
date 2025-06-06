@@ -33,16 +33,20 @@ def init_db(db_path):
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS samples (
             sample_id TEXT PRIMARY KEY,
-            subject_id TEXT FOREIGN KEY REFERENCES subjects(subject_id),
+            subject_id TEXT FOREIGN KEY REFERENCES subjects(subject_id) NOT NULL,
             treatment_id TEXT FOREIGN KEY REFERENCES treatments(treatment_id),
             time_from_treatment_start INTEGER,
             response TEXT,
             sample_type TEXT,
-            b_cell_count INTEGER,
-            cd8_t_cell_count INTEGER,
-            cd4_t_cell_count INTEGER,
-            nk_cell_count INTEGER,
-            monocyte_count INTEGER
+    ''')
+
+    cursor.execute('''
+            CREATE TABLE IF NOT EXISTS cell_counts (
+                sample_id TEXT FOREIGN KEY REFERENCES samples(sample_id) NOT NULL,
+                cell_type TEXT,
+                count INTEGER,
+                PRIMARY KEY (sample_id, cell_type)
+            )
     ''')
 
     conn.commit()
