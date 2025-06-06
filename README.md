@@ -53,7 +53,7 @@ erDiagram
     }
 
     CELL_COUNTS {
-        TEXT sample_id FK PK
+        TEXT sample_id PK, FK
         TEXT cell_type PK
         INTEGER count
     }
