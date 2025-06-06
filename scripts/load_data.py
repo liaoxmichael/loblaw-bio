@@ -1,14 +1,13 @@
 import pandas as pd
-import sqlite3
+from utils import BASE_DIR, DB_PATH, get_connection
 
-CELL_COUNT_CSV = "cell-count.csv"
-DB_PATH = "sample_data.sqlite"
+CELL_COUNT_CSV = BASE_DIR / "data" / "cell-count.csv"
 CELL_TYPES = ['b_cell', 'cd8_t_cell', 'cd4_t_cell', 'nk_cell', 'monocyte']
 
 
 def init_db(db_path):
     """Initialize the SQLite database."""
-    conn = sqlite3.connect(db_path)
+    conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS projects (
@@ -56,13 +55,41 @@ def init_db(db_path):
             )
     ''')
 
+    cursor.execute('''
+            CREATE VIEW IF NOT EXISTS overview AS
+            SELECT
+                projects.project_id,
+                subjects.subject_id,
+                subjects.condition,
+                subjects.age,
+                subjects.sex,
+                treatments.treatment_id,
+                samples.response,
+                samples.sample_id,
+                samples.sample_type,
+                samples.time_from_treatment_start,
+                MAX (CASE WHEN cell_counts.cell_type = 'b_cell' THEN cell_counts.count ELSE NULL END) AS b_cell,
+                MAX (CASE WHEN cell_counts.cell_type = 'cd8_t_cell' THEN cell_counts.count ELSE NULL END) AS cd8_t_cell,
+                MAX (CASE WHEN cell_counts.cell_type = 'cd4_t_cell' THEN cell_counts.count ELSE NULL END) AS cd4_t_cell,
+                MAX (CASE WHEN cell_counts.cell_type = 'nk_cell' THEN cell_counts.count ELSE NULL END) AS nk_cell,
+                MAX (CASE WHEN cell_counts.cell_type = 'monocyte' THEN cell_counts.count ELSE NULL END) AS monocyte
+            FROM
+                projects
+            JOIN subjects ON projects.project_id = subjects.project_id
+            JOIN samples ON subjects.subject_id = samples.subject_id
+            LEFT JOIN treatments ON samples.treatment_id = treatments.treatment_id
+            LEFT JOIN cell_counts ON samples.sample_id = cell_counts.sample_id
+            GROUP BY
+                samples.sample_id
+        ''')
+
     conn.commit()
     conn.close()
 
 
 def load_data_from_csv(file_path):
     df = pd.read_csv(file_path)
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_connection()
     cursor = conn.cursor()
     for project_id in df['project'].unique():
         cursor.execute('INSERT OR IGNORE INTO projects (project_id) VALUES (?)', (project_id,))
