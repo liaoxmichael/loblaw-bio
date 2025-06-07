@@ -4,7 +4,7 @@ A scalable project consisting of a fully-functional relational database w/ norma
 
 ## Running this Locally
 
-You can access a live version of the front-end linked here (hosted on Streamlit Community Cloud).
+You can access a live version of the front-end [linked here (hosted on Streamlit Community Cloud)](https://liaoxmichael-loblaw-bio-appapp-fwecnm.streamlit.app/).
 
 But if you'd like to run the code yourself, you'll need a few...
 

@@ -422,7 +422,7 @@ if page == "Samples":
 
     df_filtered_freq = grid_response_freq['data']
 
-    with st.expander("**Box Plots**"):
+    with st.expander("**Box Plot**"):
         fig, ax = plt.subplots(figsize=(10, 6))
         sns.boxplot(
             data=df_filtered_freq[df_filtered_freq['response'].isin(['y', 'n'])],
