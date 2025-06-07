@@ -46,6 +46,8 @@ Initially, I planned on including cell count data (e.g. b_cell, monocyte, etc.) 
 
 (Note: This is my first time using `mermaid` to render Entity Relationship diagrams, so I'm not certain on the compatibility across browsers -- sorry if it doesn't work!. I've included a screenshot for redundancy's sake, too.)
 
+![An Entity Relationship diagram of the database included.](https://github.com/liaoxmichael/loblaw-bio/blob/main/docs/ERD.svg)
+
 ```mermaid
 erDiagram
 
