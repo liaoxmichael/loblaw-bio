@@ -3,6 +3,11 @@ import subprocess
 import streamlit as st
 import sys
 from st_aggrid import AgGrid, GridOptionsBuilder
+import seaborn as sns
+import matplotlib.pyplot as plt
+import scipy.stats as stats
+import pandas as pd
+
 
 sys.path.append(str(pathlib.Path(__file__).resolve().parent.parent))
 
@@ -38,9 +43,61 @@ sql_query_samples = f'''
         projects.project_id ASC
 '''
 
+sql_query_frequencies = '''
+        SELECT
+            cell_counts.sample_id,
+            cell_counts.cell_type AS population,
+            cell_counts.count,
+            totals.total_count,
+            100.0 * cell_counts.count / totals.total_count AS relative_frequency
+        FROM
+            cell_counts
+        JOIN (
+            SELECT sample_id,
+                   SUM(count) AS total_count
+            FROM cell_counts
+            GROUP BY sample_id
+        ) totals ON cell_counts.sample_id = totals.sample_id
+    '''
+
+sql_query_rich_frequencies = '''
+        SELECT
+            samples.sample_id,
+            samples.subject_id,
+            subjects.condition,
+            subjects.age,
+            subjects.sex,
+            samples.treatment_id,
+            samples.response,
+            samples.sample_type,
+            samples.time_from_treatment_start,
+            projects.project_id,
+            cell_counts.cell_type AS population,
+            cell_counts.count AS count,
+            total.total_count,
+            100.0 * cell_counts.count / total.total_count AS relative_frequency
+        FROM
+            samples
+        JOIN subjects ON samples.subject_id = subjects.subject_id
+        JOIN projects ON subjects.project_id = projects.project_id
+        LEFT JOIN treatments ON samples.treatment_id = treatments.treatment_id
+        JOIN cell_counts ON samples.sample_id = cell_counts.sample_id
+        JOIN (
+            SELECT
+                sample_id,
+                SUM(count) AS total_count
+            FROM
+                cell_counts
+            GROUP BY
+                sample_id
+        ) AS total ON samples.sample_id = total.sample_id
+        ORDER BY
+            samples.sample_id ASC, cell_counts.cell_type ASC
+'''
+
 
 def show_add_sample_form():
-    with st.expander("Add new sample", expanded=False):
+    with st.expander("**Add new sample**", expanded=False):
         with st.form("add_sample_form"):
             subjects_df = query_df("SELECT subject_id FROM subjects ORDER BY subject_id ASC")
             subjects_options = subjects_df['subject_id'].tolist()
@@ -135,7 +192,7 @@ def show_add_sample_form():
 
 
 def show_add_project_form():
-    with st.expander("Add new project", expanded=False):
+    with st.expander("**Add new project**", expanded=False):
         with st.form("add_project_form"):
             project_id = st.text_input("Project ID")
 
@@ -153,7 +210,7 @@ def show_add_project_form():
 
 
 def show_add_subject_form():
-    with st.expander("Add new subject", expanded=False):
+    with st.expander("**Add new subject**", expanded=False):
         with st.form("add_subject_form"):
             projects_df = query_df("SELECT project_id FROM projects ORDER BY project_id ASC")
             project_options = projects_df['project_id'].tolist()
@@ -190,7 +247,7 @@ def show_add_subject_form():
 
 
 def show_add_treatment_form():
-    with st.expander("Add new treatment", expanded=False):
+    with st.expander("**Add new treatment**", expanded=False):
         with st.form("add_treatment_form"):
             treatment_id = st.text_input("Treatment ID")
 
@@ -268,25 +325,27 @@ if st.sidebar.button("Reload", help="Reload data from CSV", icon="🔄"):
 
 # body text
 st.title("Loblaw Bio Analytics Dashboard")
-st.write("If you'd like to add new entries to other tables, please use the sidebar.")
+st.write("If you'd like to add new entries to other tables, please use the sidebar. Analysis can be found farther down the Samples page.")
 
 config = PAGE_CONFIG[page]
 st.header(page)
 
 # pull up add entry form
-config["form_func"]()
+if config["form_func"]:
+    config["form_func"]()
 
 if st.session_state.add_success:
     st.success("Added new entry successfully!")
     st.session_state.add_success = False
 
-
 df = query_df(config["sql_query"])
 
 # using AgGrid for an interactive table!
 gb = GridOptionsBuilder.from_dataframe(df)
-gb.configure_selection('multiple', use_checkbox=True, groupSelectsChildren=True)
-gb.configure_default_column(autoSize=True, resizable=True)
+if config['form_func']:  # ignore checkboxes if it's a table w/o CRUD
+    gb.configure_selection('multiple', use_checkbox=True, groupSelectsChildren=True)
+
+gb.configure_default_column(filter=True, autoSize=True, resizable=True)
 gb.configure_grid_options(autoSizeStrategy={'type': 'fitCellContents'})
 
 gridOptions = gb.build()
@@ -298,25 +357,98 @@ grid_response = AgGrid(
     theme="streamlit"
 )
 
+df_filtered = grid_response['data']
+st.write(f"{df_filtered.shape[0]} rows showing")
+
 # delete button logic
-selected_rows = grid_response['selected_rows']
+if config['form_func']:  # again, ignore deleting if no CRUD
+    selected_rows = grid_response['selected_rows']
 
-if selected_rows is not None and not selected_rows.empty:
-    st.write(f"Selected {len(selected_rows)} row(s).")
+    if selected_rows is not None and not selected_rows.empty:
+        st.write(f"Selected {len(selected_rows)} row(s).")
 
-    if st.button("Delete selected rows", icon="🗑️"):
-        ids_to_delete = selected_rows[config['id_field']].tolist()
-        try:
-            placeholders = ",".join("?" for _ in ids_to_delete)
-            delete_sql = f"DELETE FROM {config['table_name']} WHERE {config['id_field']} IN ({placeholders})"
-            run_sql(delete_sql, ids_to_delete)
-            st.success(f"Deleted {len(ids_to_delete)} rows successfully.")
-            st.session_state.delete_success = True
-            st.rerun()
-        except Exception as e:
-            st.error(f"Failed to delete rows: {e}")
-else:
-    st.info("Select rows to delete.")
-    if st.session_state.delete_success:
-        st.success("Deleted rows successfully!")
-        st.session_state.delete_success = False
+        if st.button("Delete selected rows", icon="🗑️"):
+            ids_to_delete = selected_rows[config['id_field']].tolist()
+            try:
+                placeholders = ",".join("?" for _ in ids_to_delete)
+                delete_sql = f"DELETE FROM {config['table_name']} WHERE {config['id_field']} IN ({placeholders})"
+                run_sql(delete_sql, ids_to_delete)
+                st.success(f"Deleted {len(ids_to_delete)} rows successfully.")
+                st.session_state.delete_success = True
+                st.rerun()
+            except Exception as e:
+                st.error(f"Failed to delete rows: {e}")
+    else:
+        st.info("Select rows to delete.")
+        if st.session_state.delete_success:
+            st.success("Deleted rows successfully!")
+            st.session_state.delete_success = False
+
+if page == "Samples":
+    with st.expander("**Filtered Stats**"):
+        num_samples = df_filtered['sample_id'].nunique()
+        num_subjects = df_filtered['subject_id'].nunique()
+        num_responders = (df_filtered['response'] == 'y').sum()
+        num_nonresponders = (df_filtered['response'] == 'n').sum()
+        num_males = (df_filtered['sex'] == 'M').nunique()
+        num_females = (df_filtered['sex'] == 'F').nunique()
+        projects_breakdown = df_filtered.groupby(
+            'project_id')['sample_id'].nunique().rename("total_samples").reset_index()
+
+        st.write(f"- Number of samples: {num_samples}")
+        st.write(f"- Number of subjects: {num_subjects}")
+        st.write(f"- Responders (y): {num_responders}")
+        st.write(f"- Non-responders (n): {num_nonresponders}")
+        st.write(f"- Male subjects: {num_males}")
+        st.write(f"- Female subjects: {num_females}")
+
+    with st.expander("**Samples Per Project**"):
+        st.dataframe(projects_breakdown)
+
+    st.markdown("### Relative Frequencies")
+    st.write("The following visualizations are tied to this table. Any filtering you do will update the visualizations below.")
+    df_freq = query_df(sql_query_rich_frequencies)
+    gb_freq = GridOptionsBuilder.from_dataframe(df_freq)
+    gb_freq.configure_default_column(filter=True, autoSize=True, resizable=True)
+    gb_freq.configure_grid_options(autoSizeStrategy={'type': 'fitCellContents'})
+    gridOptions_freq = gb_freq.build()
+
+    grid_response_freq = AgGrid(
+        df_freq,
+        gridOptions=gridOptions_freq,
+        update_on="SelectionChanged",
+        theme="streamlit"
+    )
+
+    df_filtered_freq = grid_response_freq['data']
+
+    with st.expander("**Box Plots**"):
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.boxplot(
+            data=df_filtered_freq[df_filtered_freq['response'].isin(['y', 'n'])],
+            x='population',
+            y='relative_frequency',
+            hue='response',
+            ax=ax
+        )
+        ax.set_ylabel("Relative Frequency (%)")
+        ax.set_xlabel("Cell Population")
+        ax.set_title("Relative Frequencies: Responders vs Non-Responders")
+        st.pyplot(fig)
+
+    stat_results = []
+    for cell_type in df_filtered_freq['population'].unique():
+        df_cell_type = df_filtered_freq[df_filtered_freq['population'] == cell_type]
+        responders = df_cell_type[df_cell_type['response'] == 'y']['relative_frequency']
+        nonresponders = df_cell_type[df_cell_type['response'] == 'n']['relative_frequency']
+        if len(responders) > 0 and len(nonresponders) > 0:
+            u_stat, p_val = stats.mannwhitneyu(responders, nonresponders)
+            stat_results.append({
+                'Population': cell_type,
+                'p-value': p_val,
+                '# Responders': len(responders),
+                '# Non-Responders': len(nonresponders)
+            })
+
+    stat_df = pd.DataFrame(stat_results).sort_values('p-value')
+    st.dataframe(stat_df.style.format({'p-value': '{:.4f}'}))

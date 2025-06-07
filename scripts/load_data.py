@@ -59,35 +59,6 @@ def init_db(db_path):
             )
     ''')
 
-    # this is a cool view, but not dynamic
-    # cursor.execute('''
-    #         CREATE VIEW IF NOT EXISTS overview AS
-    #         SELECT
-    #             projects.project_id,
-    #             subjects.subject_id,
-    #             subjects.condition,
-    #             subjects.age,
-    #             subjects.sex,
-    #             treatments.treatment_id,
-    #             samples.response,
-    #             samples.sample_id,
-    #             samples.sample_type,
-    #             samples.time_from_treatment_start,
-    #             MAX (CASE WHEN cell_counts.cell_type = 'b_cell' THEN cell_counts.count ELSE NULL END) AS b_cell,
-    #             MAX (CASE WHEN cell_counts.cell_type = 'cd8_t_cell' THEN cell_counts.count ELSE NULL END) AS cd8_t_cell,
-    #             MAX (CASE WHEN cell_counts.cell_type = 'cd4_t_cell' THEN cell_counts.count ELSE NULL END) AS cd4_t_cell,
-    #             MAX (CASE WHEN cell_counts.cell_type = 'nk_cell' THEN cell_counts.count ELSE NULL END) AS nk_cell,
-    #             MAX (CASE WHEN cell_counts.cell_type = 'monocyte' THEN cell_counts.count ELSE NULL END) AS monocyte
-    #         FROM
-    #             projects
-    #         JOIN subjects ON projects.project_id = subjects.project_id
-    #         JOIN samples ON subjects.subject_id = samples.subject_id
-    #         LEFT JOIN treatments ON samples.treatment_id = treatments.treatment_id
-    #         LEFT JOIN cell_counts ON samples.sample_id = cell_counts.sample_id
-    #         GROUP BY
-    #             samples.sample_id
-    #     ''')
-
     conn.commit()
     conn.close()
 
