@@ -190,6 +190,10 @@ def show_add_sample_form():
                     except Exception as e:
                         st.error(f"Failed to add entry: {e}")
 
+            if st.session_state.add_success:
+                st.success("Added new entry successfully!")
+                st.session_state.add_success = False
+
 
 def show_add_project_form():
     with st.expander("**Add new project**", expanded=False):
@@ -207,6 +211,10 @@ def show_add_project_form():
                         st.rerun()
                     except Exception as e:
                         st.error(f"Failed to add entry: {e}")
+
+            if st.session_state.add_success:
+                st.success("Added new entry successfully!")
+                st.session_state.add_success = False
 
 
 def show_add_subject_form():
@@ -245,6 +253,10 @@ def show_add_subject_form():
                     except Exception as e:
                         st.error(f"Failed to add entry: {e}")
 
+            if st.session_state.add_success:
+                st.success("Added new entry successfully!")
+                st.session_state.add_success = False
+
 
 def show_add_treatment_form():
     with st.expander("**Add new treatment**", expanded=False):
@@ -262,6 +274,10 @@ def show_add_treatment_form():
                         st.rerun()
                     except Exception as e:
                         st.error(f"Failed to add entry: {e}")
+
+            if st.session_state.add_success:
+                st.success("Added new entry successfully!")
+                st.session_state.add_success = False
 
 
 # a config to modularize code and allow hotswapping of tables without repeated code
@@ -334,10 +350,6 @@ st.header(page)
 if config["form_func"]:
     config["form_func"]()
 
-if st.session_state.add_success:
-    st.success("Added new entry successfully!")
-    st.session_state.add_success = False
-
 df = query_df(config["sql_query"])
 
 # using AgGrid for an interactive table!
@@ -390,17 +402,17 @@ if page == "Samples":
         num_subjects = df_filtered['subject_id'].nunique()
         num_responders = (df_filtered['response'] == 'y').sum()
         num_nonresponders = (df_filtered['response'] == 'n').sum()
-        num_males = (df_filtered['sex'] == 'M').nunique()
-        num_females = (df_filtered['sex'] == 'F').nunique()
+        num_males = (df_filtered['sex'] == 'M').sum()
+        num_females = (df_filtered['sex'] == 'F').sum()
         projects_breakdown = df_filtered.groupby(
             'project_id')['sample_id'].nunique().rename("total_samples").reset_index()
 
         st.write(f"- Number of samples: {num_samples}")
         st.write(f"- Number of subjects: {num_subjects}")
-        st.write(f"- Responders (y): {num_responders}")
-        st.write(f"- Non-responders (n): {num_nonresponders}")
-        st.write(f"- Male subjects: {num_males}")
-        st.write(f"- Female subjects: {num_females}")
+        st.write(f"- Samples from responders (y): {num_responders}")
+        st.write(f"- Samples from non-responders (n): {num_nonresponders}")
+        st.write(f"- Samples from male subjects: {num_males}")
+        st.write(f"- Samples from female subjects: {num_females}")
 
     with st.expander("**Samples Per Project**"):
         st.dataframe(projects_breakdown)
